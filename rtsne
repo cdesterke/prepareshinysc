@@ -1,0 +1,12 @@
+library(Rtsne)
+
+
+
+
+trans<-t(evt)
+evt_matrix<-as.matrix(trans)
+tsne_out <- Rtsne(evt_matrix,pca=FALSE,perplexity=30,theta=0.0)
+library(ggplot2)
+tsne_plot <- data.frame(x = tsne_out$Y[,1], y = tsne_out$Y[,2], col = meta$group)
+merged<-cbind(tsne_plot,trans)
+ggplot(merged) + geom_point(aes(x=x, y=y, color=col,size = CD9))
