@@ -1,0 +1,186 @@
+
+library(Seurat)
+library(Matrix)
+
+#scan the set1 and create first Seurat object
+data1 <- Read10X(data.dir = "set1")
+set1  <- CreateSeuratObject(counts = data1, min.cells = 3, project = "set1")
+meta1<-read.table("set1/samples.txt",h=T,sep="\t")
+row.names(meta1)<-meta1$Cell.Barcode
+set1 <- AddMetaData(object = set1,  metadata = meta1)
+head(set1[[]])
+
+                   orig.ident nCount_RNA nFeature_RNA        Sample       Cell.Barcode Type
+AAACCTGAGGCGTACA-1       set1       2235          909 S02_P01_LCP21 AAACCTGAGGCGTACA-1  CAF
+AAACGGGAGATCGATA-1       set1       3555         1266 S02_P01_LCP21 AAACGGGAGATCGATA-1  CAF
+AAAGCAAAGATCGGGT-1       set1       7751         2495 S02_P01_LCP21 AAAGCAAAGATCGGGT-1  CAF
+AAATGCCGTCTCAACA-1       set1       3168         1100 S02_P01_LCP21 AAATGCCGTCTCAACA-1  CAF
+AACACGTCACGGCTAC-1       set1       2040         1096 S02_P01_LCP21 AACACGTCACGGCTAC-1  TEC
+AACCGCGAGACGCTTT-1       set1      10126         2864 S02_P01_LCP21 AACCGCGAGACGCTTT-1  CAF
+
+
+#scan the set2 and create second Seurat object
+data2 <- Read10X(data.dir = "set2")
+set2  <- CreateSeuratObject(counts = data2, min.cells = 3, project = "set2")
+meta2<-read.table("set2/samples.txt",h=T,sep="\t")
+row.names(meta2)<-meta2$Cell.Barcode
+set2 <- AddMetaData(object = set2,  metadata = meta2)
+head(set2[[]])
+
+                   orig.ident nCount_RNA nFeature_RNA         Sample       Cell.Barcode         Type
+AAACCTGAGCTATGCT-2       set2       2570          711 S300_P02_LCP60 AAACCTGAGCTATGCT-2       T cell
+AAACCTGTCATCGCTC-2       set2       2060          551 S300_P02_LCP60 AAACCTGTCATCGCTC-2       T cell
+AAACCTGTCTTAACCT-2       set2       1663          519 S300_P02_LCP60 AAACCTGTCTTAACCT-2       T cell
+AAACGGGCAGCTATTG-2       set2       2048          909 S300_P02_LCP60 AAACGGGCAGCTATTG-2 unclassified
+AAACGGGCATTCACTT-2       set2       2114          871 S300_P02_LCP60 AAACGGGCATTCACTT-2       T cell
+AAACGGGGTTGCGTTA-2       set2       2032          759 S300_P02_LCP60 AAACGGGGTTGCGTTA-2       T cell
+
+> set1
+An object of class Seurat 
+20124 features across 5115 samples within 1 assay 
+Active assay: RNA (20124 features, 0 variable features)
+> set2
+An object of class Seurat 
+19437 features across 4831 samples within 1 assay 
+Active assay: RNA (19437 features, 0 variable features)
+
+
+# merge seurat objets
+all <- merge(set1, y = set2, project = "liver")
+
+all
+An object of class Seurat 
+21287 features across 9946 samples within 1 assay 
+Active assay: RNA (21287 features, 0 variable features)
+
+#description of the object by their cell origin
+list <- SplitObject(all, split.by = "orig.ident")
+############## description of combined object
+list
+
+$set1
+An object of class Seurat 
+21287 features across 5115 samples within 1 assay 
+Active assay: RNA (21287 features, 0 variable features)
+
+$set2
+An object of class Seurat 
+21287 features across 4831 samples within 1 assay 
+Active assay: RNA (21287 features, 0 variable features)
+
+
+#normalization
+list <- lapply(X = list, FUN = function(x) {
+x <- NormalizeData(x)
+x <- FindVariableFeatures(x, selection.method = "vst", )
+})
+nfeatures = 2000
+
+#find common anchors 
+anchors <- FindIntegrationAnchors(object.list = list, dims = 1:20)
+combined <- IntegrateData(anchorset = anchors, dims = 1:20)
+DefaultAssay(combined) <- "integrated"
+
+
+Computing 2000 integration features
+Scaling features for provided objects
+
+  |                                                  | 0 % ~calculating  
+  |+++++++++++++++++++++++++                         | 50% ~01s          
+  |++++++++++++++++++++++++++++++++++++++++++++++++++| 100% elapsed=02s  
+Finding all pairwise anchors
+
+  |                                                  | 0 % ~calculating  Running CCA
+Merging objects
+Finding neighborhoods
+Finding anchors
+        Found 6764 anchors
+Filtering anchors
+        Retained 4561 anchors
+
+#scale data
+combined <- ScaleData(combined, verbose = FALSE)
+#dimensionnal reductions
+combined <- RunPCA(combined, npcs = 30, verbose = FALSE)
+ElbowPlot(combined,n=30)
+
+combined <- RunUMAP(combined, reduction = "pca", dims = 1:15)
+
+Warning: The default method for RunUMAP has changed from calling Python UMAP via reticulate to the R-native UWOT using the cosine metric
+To use Python UMAP via reticulate, set umap.method to 'umap-learn' and metric to 'correlation'
+This message will be shown once per session
+13:11:05 UMAP embedding parameters a = 0.9922 b = 1.112
+13:11:05 Read 9946 rows and found 30 numeric columns
+13:11:05 Using Annoy for neighbor search, n_neighbors = 30
+13:11:05 Building Annoy index with metric = cosine, n_trees = 50
+0%   10   20   30   40   50   60   70   80   90   100%
+[----|----|----|----|----|----|----|----|----|----|
+**************************************************|
+13:11:10 Writing NN index file to temp file C:\Users\CDESTE~1\AppData\Local\Temp\RtmpawpZV7\file308842a149e9
+13:11:10 Searching Annoy index using 1 thread, search_k = 3000
+13:11:13 Annoy recall = 100%
+13:11:14 Commencing smooth kNN distance calibration using 1 thread
+13:11:15 Initializing from normalized Laplacian + noise
+13:11:16 Commencing optimization for 500 epochs, with 425942 positive edges
+0%   10   20   30   40   50   60   70   80   90   100%
+[----|----|----|----|----|----|----|----|----|----|
+**************************************************|
+13:11:57 Optimization finished
+
+combined <- RunTSNE(combined, npcs = 15, verbose = FALSE)
+
+DimPlot(combined, reduction = "umap",group.by ="orig.ident")
+
+head(combined[[]])
+
+DimPlot(combined, reduction = "umap",group.by ="Type")
+
+DimPlot(combined, reduction = "umap",group.by ="Diagnosis", cols=rainbow(2))
+DimPlot(combined, reduction = "tsne",group.by ="conca", cols="Paired",pt.size=1.5)
+
+library(viridis)
+DimPlot(combined, reduction = "tsne",group.by ="conca", cols=inferno(16),pt.size=1.5)
+library(pals)
+DimPlot(combined, reduction = "tsne",group.by ="conca", cols=cols25(16),pt.size=1.5)
+DimPlot(combined, reduction = "tsne",group.by ="conca", cols=cols25(19),pt.size=1.5)
+FeaturePlot(combined, features = c("VIM"),min.cutoff = "q9",cols=c("#CCFFFF","darkred"),split.by= "Diagnosis",reduction="tsne",pt.size=1.5)
+
+FeatureScatter(combined, feature1 = "SEPT9", feature2 = "VIM", pt.size = 1.5,group.by="conca",cols=cols25(19))
+
+RidgePlot(combined, features = c("VIM"),group.by="conca",cols=cols25(19))
+
+
+
+Idents(object = combined) <- 'Type'
+Idents(object = combined)
+
+markers <- FindAllMarkers(combined, only.pos = TRUE, min.pct = 0.5, logfc.threshold = 0.25)
+library(dplyr)
+markers %>% group_by(cluster) %>% top_n(n = 5, wt = avg_logFC)-> out
+
+top5 <- markers %>% group_by(cluster) %>% top_n(n = 5, wt = avg_logFC)
+DoHeatmap(combined, features = top5$gene) + NoLegend()
+
+#set identities with meta column
+Idents(object = combined) <- 'conca'
+Idents(object = combined)
+
+#### subseting
+hpcicca<-WhichCells(combined, idents = "HPC-like-iCCA", expression = KRT19 > 2 , slot ="data")
+length(hpcicca)
+329
+mcicca<-WhichCells(combined, idents = "Malignant cell-iCCA", expression = KRT19 > 2, slot ="data")
+length(mcicca)
+510
+mix<-c(hpcicca,mcicca)
+length(mix)
+839
+VlnPlot(combined, features = c("KRT19"), slot = "data", log = TRUE,split.by= "conca",pt.size=1)
+
+sub <- SubsetData(object = combined, cells = mix)
+
+VlnPlot(combined, features = c("KRT19"), slot = "counts", log = TRUE,split.by= "conca",pt.size=1)
+
+write.table(sub@assays[["RNA"]]@counts, file='krt19icca.tsv', quote=FALSE, sep='\t', col.names = TRUE)
+
+write.table(sub@active.ident, file='krt19iccapheno.tsv', quote=FALSE, sep='\t', col.names = TRUE)
